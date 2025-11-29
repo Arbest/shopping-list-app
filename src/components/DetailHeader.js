@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const DetailHeader = ({ listName, isOwner, onUpdateName }) => {
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(listName);
 
@@ -32,7 +34,12 @@ const DetailHeader = ({ listName, isOwner, onUpdateName }) => {
         </div>
       ) : (
         <div className="header-display">
-          <h1>{listName}</h1>
+          <div className="header-left">
+            <button onClick={() => navigate('/')} className="btn btn-icon btn-back">
+              Back
+            </button>
+            <h1>{listName}</h1>
+          </div>
           {isOwner && (
             <button onClick={() => setIsEditing(true)} className="btn btn-icon">
               Edit
