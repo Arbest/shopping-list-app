@@ -1,26 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useShoppingLists } from '../hooks/useShoppingLists';
+import { CURRENT_USER_ID } from '../config';
+import LoadingSpinner from './LoadingSpinner';
+import ErrorMessage from './ErrorMessage';
 import './styles.css';
-
-// Mock current user
-const currentUser = { id: 'u1', name: 'Pavel Arbes' };
-
-// Initial data - shopping lists
-const initialLists = [
-  { id: 1, name: 'Weekly Groceries', ownerId: 'u1', ownerName: 'Pavel Arbes', archived: false, itemCount: 5, memberCount: 2 },
-  { id: 2, name: 'Party Supplies', ownerId: 'u2', ownerName: 'Jan Novak', archived: false, itemCount: 3, memberCount: 3 },
-  { id: 3, name: 'Office Supplies', ownerId: 'u1', ownerName: 'Pavel Arbes', archived: false, itemCount: 8, memberCount: 1 },
-  { id: 4, name: 'Old Shopping List', ownerId: 'u1', ownerName: 'Pavel Arbes', archived: true, itemCount: 0, memberCount: 1 },
-  { id: 5, name: 'Holiday Gifts', ownerId: 'u3', ownerName: 'Marie Svobodova', archived: false, itemCount: 12, memberCount: 4 },
-];
 
 function ShoppingListOverview() {
   const navigate = useNavigate();
-  const [lists, setLists] = useState(initialLists);
+  const { lists, state, error, reload, createList, deleteList } = useShoppingLists();
+
   const [showArchived, setShowArchived] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [newListName, setNewListName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filter lists based on archived toggle
   const filteredLists = showArchived
@@ -28,28 +22,34 @@ function ShoppingListOverview() {
     : lists.filter(list => !list.archived);
 
   // Create new list
-  const handleCreateList = () => {
-    if (!newListName.trim()) return;
+  const handleCreateList = async () => {
+    if (!newListName.trim() || isSubmitting) return;
 
-    const newList = {
-      id: Date.now(),
-      name: newListName.trim(),
-      ownerId: currentUser.id,
-      ownerName: currentUser.name,
-      archived: false,
-      itemCount: 0,
-      memberCount: 1
-    };
-
-    setLists([...lists, newList]);
-    setNewListName('');
-    setShowCreateModal(false);
+    setIsSubmitting(true);
+    try {
+      await createList(newListName.trim());
+      setNewListName('');
+      setShowCreateModal(false);
+    } catch (err) {
+      console.error('Failed to create list:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Delete list
-  const handleDeleteList = (listId) => {
-    setLists(lists.filter(list => list.id !== listId));
-    setShowDeleteConfirm(null);
+  const handleDeleteList = async (listId) => {
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      await deleteList(listId);
+      setShowDeleteConfirm(null);
+    } catch (err) {
+      console.error('Failed to delete list:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Navigate to detail
@@ -57,6 +57,31 @@ function ShoppingListOverview() {
     navigate(`/detail/${listId}`);
   };
 
+  // Render loading state
+  if (state === 'pending') {
+    return (
+      <div className="overview-container">
+        <header className="overview-header">
+          <h1>Shopping Lists</h1>
+        </header>
+        <LoadingSpinner message="Loading shopping lists..." />
+      </div>
+    );
+  }
+
+  // Render error state
+  if (state === 'error') {
+    return (
+      <div className="overview-container">
+        <header className="overview-header">
+          <h1>Shopping Lists</h1>
+        </header>
+        <ErrorMessage message={error} onRetry={reload} />
+      </div>
+    );
+  }
+
+  // Render ready state
   return (
     <div className="overview-container">
       <header className="overview-header">
@@ -89,14 +114,14 @@ function ShoppingListOverview() {
               {list.archived && <span className="archived-badge">Archived</span>}
             </div>
             <div className="tile-meta">
-              <span>{list.itemCount} items</span>
-              <span>{list.memberCount} members</span>
+              <span>{list.items?.length || 0} items</span>
+              <span>{list.members?.length || 1} members</span>
             </div>
             <div className="tile-footer">
               <span className="tile-owner">
-                {list.ownerId === currentUser.id ? 'You' : list.ownerName}
+                {list.ownerId === CURRENT_USER_ID ? 'You' : list.ownerName}
               </span>
-              {list.ownerId === currentUser.id && (
+              {list.ownerId === CURRENT_USER_ID && (
                 <button
                   className="btn btn-danger btn-sm"
                   onClick={(e) => {
@@ -134,14 +159,23 @@ function ShoppingListOverview() {
                 onChange={(e) => setNewListName(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleCreateList()}
                 autoFocus
+                disabled={isSubmitting}
               />
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowCreateModal(false)}
+                disabled={isSubmitting}
+              >
                 Cancel
               </button>
-              <button className="btn btn-primary" onClick={handleCreateList}>
-                Create
+              <button
+                className="btn btn-primary"
+                onClick={handleCreateList}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Creating...' : 'Create'}
               </button>
             </div>
           </div>
@@ -160,11 +194,19 @@ function ShoppingListOverview() {
               <p className="text-muted">This action cannot be undone.</p>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowDeleteConfirm(null)}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowDeleteConfirm(null)}
+                disabled={isSubmitting}
+              >
                 Cancel
               </button>
-              <button className="btn btn-danger" onClick={() => handleDeleteList(showDeleteConfirm.id)}>
-                Delete
+              <button
+                className="btn btn-danger"
+                onClick={() => handleDeleteList(showDeleteConfirm.id)}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

@@ -1,192 +1,157 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useShoppingListDetail } from '../hooks/useShoppingListDetail';
+import { CURRENT_USER_ID } from '../config';
 import DetailHeader from './DetailHeader';
 import MembersSection from './MembersSection';
 import ItemsSection from './ItemsSection';
-
-// Mock current user
-const currentUserId = 'u1';
-
-// Initial data constant - all shopping lists with their details
-const ALL_LISTS_DATA = {
-  '1': {
-    id: '1',
-    name: 'Weekly Groceries',
-    ownerId: 'u1',
-    members: [
-      { id: 'u1', name: 'Pavel Arbes (Me)', isOwner: true },
-      { id: 'u2', name: 'Jan Novak', isOwner: false },
-    ],
-    items: [
-      { id: 'item1', name: 'Milk', resolved: false },
-      { id: 'item2', name: 'Bread', resolved: false },
-      { id: 'item3', name: 'Butter', resolved: true },
-      { id: 'item4', name: 'Eggs', resolved: false },
-      { id: 'item5', name: 'Cheese', resolved: true }
-    ]
-  },
-  '2': {
-    id: '2',
-    name: 'Party Supplies',
-    ownerId: 'u2',
-    members: [
-      { id: 'u2', name: 'Jan Novak', isOwner: true },
-      { id: 'u1', name: 'Pavel Arbes (Me)', isOwner: false },
-      { id: 'u3', name: 'Marie Svobodova', isOwner: false },
-    ],
-    items: [
-      { id: 'item6', name: 'Balloons', resolved: false },
-      { id: 'item7', name: 'Cake', resolved: false },
-      { id: 'item8', name: 'Candles', resolved: true }
-    ]
-  },
-  '3': {
-    id: '3',
-    name: 'Office Supplies',
-    ownerId: 'u1',
-    members: [
-      { id: 'u1', name: 'Pavel Arbes (Me)', isOwner: true },
-    ],
-    items: [
-      { id: 'item9', name: 'Pens', resolved: false },
-      { id: 'item10', name: 'Paper', resolved: false },
-      { id: 'item11', name: 'Stapler', resolved: false },
-      { id: 'item12', name: 'Folders', resolved: true },
-      { id: 'item13', name: 'Highlighters', resolved: false },
-      { id: 'item14', name: 'Notebooks', resolved: true },
-      { id: 'item15', name: 'Tape', resolved: false },
-      { id: 'item16', name: 'Scissors', resolved: false }
-    ]
-  },
-  '4': {
-    id: '4',
-    name: 'Old Shopping List',
-    ownerId: 'u1',
-    members: [
-      { id: 'u1', name: 'Pavel Arbes (Me)', isOwner: true },
-    ],
-    items: []
-  },
-  '5': {
-    id: '5',
-    name: 'Holiday Gifts',
-    ownerId: 'u3',
-    members: [
-      { id: 'u3', name: 'Marie Svobodova', isOwner: true },
-      { id: 'u1', name: 'Pavel Arbes (Me)', isOwner: false },
-      { id: 'u2', name: 'Jan Novak', isOwner: false },
-      { id: 'u4', name: 'Petr Dvorak', isOwner: false },
-    ],
-    items: [
-      { id: 'item17', name: 'Gift for Mom', resolved: false },
-      { id: 'item18', name: 'Gift for Dad', resolved: true },
-      { id: 'item19', name: 'Gift for Sister', resolved: false },
-      { id: 'item20', name: 'Gift for Brother', resolved: false },
-      { id: 'item21', name: 'Gift cards', resolved: true },
-      { id: 'item22', name: 'Wrapping paper', resolved: false },
-      { id: 'item23', name: 'Ribbons', resolved: false },
-      { id: 'item24', name: 'Christmas tree', resolved: true },
-      { id: 'item25', name: 'Decorations', resolved: false },
-      { id: 'item26', name: 'Lights', resolved: true },
-      { id: 'item27', name: 'Chocolate box', resolved: false },
-      { id: 'item28', name: 'Wine', resolved: false }
-    ]
-  }
-};
+import LoadingSpinner from './LoadingSpinner';
+import ErrorMessage from './ErrorMessage';
 
 const ShoppingListDetail = () => {
   const { id } = useParams();
+  const {
+    list,
+    state,
+    error,
+    isOwner,
+    reload,
+    updateName,
+    addMember,
+    removeMember,
+    leaveList,
+    addItem,
+    deleteItem,
+    toggleItemResolved,
+  } = useShoppingListDetail(id);
 
-  // Get initial data for this list
-  const initialData = ALL_LISTS_DATA[id] || {
-    id: id,
-    name: 'Unknown List',
-    ownerId: 'u1',
-    members: [{ id: 'u1', name: 'Pavel Arbes (Me)', isOwner: true }],
-    items: []
-  };
-
-  const [listName, setListName] = useState(initialData.name);
-  const [members, setMembers] = useState(initialData.members);
-  const [items, setItems] = useState(initialData.items);
   const [showResolved, setShowResolved] = useState(true);
 
-  const isOwner = initialData.ownerId === currentUserId;
-
   // Update list name (owner only)
-  const handleUpdateName = (newName) => {
+  const handleUpdateName = async (newName) => {
     if (isOwner) {
-      setListName(newName);
+      try {
+        await updateName(newName);
+      } catch (err) {
+        console.error('Failed to update name:', err);
+      }
     }
   };
 
   // Add member (owner only)
-  const handleAddMember = (memberName) => {
+  const handleAddMember = async (memberName) => {
     if (isOwner && memberName.trim()) {
-      const newMember = {
-        id: `user${Date.now()}`,
-        name: memberName,
-        isOwner: false
-      };
-      setMembers([...members, newMember]);
+      try {
+        const memberId = `user${Date.now()}`;
+        await addMember(memberId, memberName);
+      } catch (err) {
+        console.error('Failed to add member:', err);
+      }
     }
   };
 
   // Remove member (owner only)
-  const handleRemoveMember = (memberId) => {
+  const handleRemoveMember = async (memberId) => {
     if (isOwner) {
-      setMembers(members.filter(m => m.id !== memberId));
+      try {
+        await removeMember(memberId);
+      } catch (err) {
+        console.error('Failed to remove member:', err);
+      }
     }
   };
 
   // Leave list (members only)
-  const handleLeaveList = () => {
+  const handleLeaveList = async () => {
     if (!isOwner) {
-      alert('You have left the shopping list');
+      try {
+        await leaveList();
+        alert('You have left the shopping list');
+      } catch (err) {
+        console.error('Failed to leave list:', err);
+      }
     }
   };
 
   // Add item
-  const handleAddItem = (itemName) => {
+  const handleAddItem = async (itemName) => {
     if (itemName.trim()) {
-      const newItem = {
-        id: `item${Date.now()}`,
-        name: itemName,
-        resolved: false
-      };
-      setItems([...items, newItem]);
+      try {
+        await addItem(itemName);
+      } catch (err) {
+        console.error('Failed to add item:', err);
+      }
     }
   };
 
   // Remove item
-  const handleRemoveItem = (itemId) => {
-    setItems(items.filter(i => i.id !== itemId));
+  const handleRemoveItem = async (itemId) => {
+    try {
+      await deleteItem(itemId);
+    } catch (err) {
+      console.error('Failed to remove item:', err);
+    }
   };
 
   // Toggle item resolved status
-  const handleToggleItem = (itemId) => {
-    setItems(items.map(item =>
-      item.id === itemId ? { ...item, resolved: !item.resolved } : item
-    ));
+  const handleToggleItem = async (itemId) => {
+    try {
+      await toggleItemResolved(itemId);
+    } catch (err) {
+      console.error('Failed to toggle item:', err);
+    }
   };
+
+  // Render loading state
+  if (state === 'pending') {
+    return (
+      <div className="shopping-list-detail">
+        <LoadingSpinner message="Loading shopping list..." />
+      </div>
+    );
+  }
+
+  // Render error state
+  if (state === 'error') {
+    return (
+      <div className="shopping-list-detail">
+        <ErrorMessage message={error} onRetry={reload} />
+      </div>
+    );
+  }
+
+  // Render ready state
+  if (!list) {
+    return (
+      <div className="shopping-list-detail">
+        <ErrorMessage message="Shopping list not found" />
+      </div>
+    );
+  }
 
   // Filter items based on showResolved
   const filteredItems = showResolved
-    ? items
-    : items.filter(item => !item.resolved);
+    ? list.items
+    : list.items.filter(item => !item.resolved);
+
+  // Map members for MembersSection
+  const mappedMembers = list.members.map(member => ({
+    ...member,
+    isOwner: member.id === list.ownerId,
+  }));
 
   return (
     <div className="shopping-list-detail">
       <DetailHeader
-        listName={listName}
+        listName={list.name}
         isOwner={isOwner}
         onUpdateName={handleUpdateName}
       />
 
       <MembersSection
-        members={members}
+        members={mappedMembers}
         isOwner={isOwner}
-        currentUserId={currentUserId}
+        currentUserId={CURRENT_USER_ID}
         onAddMember={handleAddMember}
         onRemoveMember={handleRemoveMember}
         onLeave={handleLeaveList}
